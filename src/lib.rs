@@ -2,11 +2,9 @@ use chumsky::prelude::*;
 use std::collections::HashMap;
 use wana_kana;
 
-mod series_parser;
-mod string_parser;
+mod word_parser;
 
-use series_parser::series_parser;
-use string_parser::string_parser;
+use word_parser::word_parser;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Furigana {
@@ -50,83 +48,138 @@ pub fn parse_furigana<'a>(
     reading: &'a String,
     kanji_readings: &'a HashMap<char, Vec<String>>,
 ) -> Result<FuriganaString, Vec<chumsky::error::Simple<'a, char>>> {
-    expression_parser(input, kanji_readings)
+    furigana_parser(input, kanji_readings)
         .parse(reading)
         .into_result()
-        .map(FuriganaString)
+        .map(|v| {
+            let v = v
+                .into_iter()
+                .map(|(character, reading)| {
+                    if wana_kana::utils::is_char_kanji(character) {
+                        Furigana::Kanji { character, reading }
+                    } else {
+                        Furigana::Other(character)
+                    }
+                })
+                .collect();
+            FuriganaString(v)
+        })
 }
 
-pub fn expression_parser<'a>(
+pub fn furigana_parser<'a>(
     input: &'a String,
     kanji_readings: &'a HashMap<char, Vec<String>>,
-) -> impl Parser<'a, &'a str, Vec<Furigana>, extra::Err<Simple<'a, char>>> + Clone {
-    let mut parsers = vec![];
+) -> impl Parser<'a, &'a str, Vec<(char, String)>, extra::Err<Simple<'a, char>>> + Clone {
+    let mut pairs = vec![];
 
     for char in input.chars() {
         if wana_kana::utils::is_char_kanji(char) && kanji_readings.contains_key(&char) {
             let readings = kanji_readings.get(&char).unwrap();
-            let kanji_parser = kanji_parser(char, readings.clone());
-            parsers.push(kanji_parser.boxed());
+            pairs.push((char.clone(), readings.clone()));
         } else {
-            let other_parser = just(char).map(|char: char| Furigana::Other(char));
-            parsers.push(other_parser.boxed());
+            pairs.push((char.clone(), vec![char.to_string()]));
         }
     }
 
-    let parser = series_parser(parsers);
+    let parser = word_parser(pairs);
 
     parser.boxed()
 }
 
-pub fn kanji_parser<'a>(
-    kanji: char,
-    mappings: Vec<String>,
-) -> impl Parser<'a, &'a str, Furigana, extra::Err<Simple<'a, char>>> + Clone {
-    let kanji = kanji.clone();
-    choice(
-        mappings
-            .iter()
-            .map(move |reading| {
-                string_parser(reading.clone()).map(move |s: Vec<char>| {
-                    let reading = s.into_iter().collect::<String>();
-                    Furigana::Kanji {
-                        character: kanji,
-                        reading,
-                    }
-                })
-            })
-            .collect::<Vec<_>>(),
-    )
-}
-
+//Failed to parse word: 関連, reading: かんれん: readings: {'関': ["せき", "ぜき", "かか", "わる", "からくり", "かんぬき", "かん"], '連': ["つら", "なる", "つら", "ねる", "つ", "れる", "づ", "れ", "れん", "っ"]}
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn test_parse_expression() {
-        let k1 = '時';
-        let k1_readings = vec!["とき", "じ", "どき"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>();
+        let cases = vec![
+            (
+                "時間".to_string(),
+                "じかん".to_string(),
+                vec![
+                    (
+                        '時',
+                        vec!["とき".to_string(), "じ".to_string(), "どき".to_string()],
+                    ),
+                    (
+                        '間',
+                        vec![
+                            "あいだ".to_string(),
+                            "ま".to_string(),
+                            "かん".to_string(),
+                            "けん".to_string(),
+                            "あい".to_string(),
+                        ],
+                    ),
+                ],
+            ),
+            (
+                "噴煙".to_string(),
+                "ふんえん".to_string(),
+                vec![
+                    (
+                        '噴',
+                        vec!["ふ".to_string(), "く".to_string(), "ふん".to_string()],
+                    ),
+                    (
+                        '煙',
+                        vec![
+                            "けむ".to_string(),
+                            "る".to_string(),
+                            "けむり".to_string(),
+                            "けむ".to_string(),
+                            "い".to_string(),
+                            "えん".to_string(),
+                        ],
+                    ),
+                ],
+            ),
+            (
+                "関連".to_string(),
+                "かんれん".to_string(),
+                vec![
+                    (
+                        '関',
+                        vec![
+                            "せき".to_string(),
+                            "ぜき".to_string(),
+                            "かか".to_string(),
+                            "わる".to_string(),
+                            "からくり".to_string(),
+                            "かんぬき".to_string(),
+                            "かん".to_string(),
+                        ],
+                    ),
+                    (
+                        '連',
+                        vec![
+                            "つら".to_string(),
+                            "なる".to_string(),
+                            "つら".to_string(),
+                            "ねる".to_string(),
+                            "つ".to_string(),
+                            "れる".to_string(),
+                            "づ".to_string(),
+                            "れ".to_string(),
+                            "れん".to_string(),
+                            "っ".to_string(),
+                        ],
+                    ),
+                ],
+            ),
+        ];
 
-        let k2 = '間';
-        let k2_readings = vec!["あいだ", "ま", "かん", "けん", "あい"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>();
-
-        let word = "時間".to_string();
-        let reading = "じかん".to_string();
-        let kanji_readings = vec![(k1, k1_readings), (k2, k2_readings)]
-            .into_iter()
-            .collect::<HashMap<_, _>>();
-
-        let result = parse_furigana(&word, &reading, &kanji_readings);
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert_eq!(result.to_writing(), word);
-        assert_eq!(result.to_reading(), reading);
+        for (word, reading, kanji_readings) in cases {
+            let kanji_readings: HashMap<char, Vec<String>> = kanji_readings
+                .into_iter()
+                .map(|(k, v)| (k, v.into_iter().map(|s| s.to_string()).collect()))
+                .collect();
+            let result = parse_furigana(&word, &reading, &kanji_readings);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.to_writing(), word);
+            assert_eq!(result.to_reading(), reading);
+        }
     }
 }
