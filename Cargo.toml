@@ -1,11 +1,11 @@
 
 [package]
-name = "parser"
+name = "furigana_parser"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "parser"
+name = "furigana_parser"
 path = "src/lib.rs"
 
 
