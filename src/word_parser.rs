@@ -41,13 +41,12 @@ mod tests {
 
     #[test]
     fn test_word_parser() {
-        let input = "12";
         let pairs = vec![
             ('1', vec!["a".to_string(), "ab".to_string()]),
             ('2', vec!["bc".to_string()]),
         ];
         let parser = word_parser(pairs);
-        let result = parser.parse(input).into_result();
+        let result = parser.parse("abc").into_result();
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(result == vec![('1', "a".to_string()), ('2', "bc".to_string())]);
