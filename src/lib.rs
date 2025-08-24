@@ -55,7 +55,7 @@ pub fn parse_furigana<'a>(
             let v = v
                 .into_iter()
                 .map(|(character, reading)| {
-                    if wana_kana::utils::is_char_kanji(character) {
+                    if wana_kana::utils::is_char_kanji(character) || character == '々' {
                         Furigana::Kanji { character, reading }
                     } else {
                         Furigana::Other(character)
@@ -73,7 +73,9 @@ pub fn furigana_parser<'a>(
     let mut pairs = vec![];
 
     for char in input.chars() {
-        if wana_kana::utils::is_char_kanji(char) && kanji_readings.contains_key(&char) {
+        if (wana_kana::utils::is_char_kanji(char) || char == '々')
+            && kanji_readings.contains_key(&char)
+        {
             let readings = kanji_readings.get(&char).unwrap();
             pairs.push((char.clone(), readings.clone()));
         } else {
@@ -91,6 +93,7 @@ pub fn furigana_parser<'a>(
 mod test {
     use super::*;
 
+    //Failed to parse word: 着々, reading: ちゃくちゃく: readings: {'着': ["き", "る", "き", "せる", "つ", "く", "つ", "ける", "ちゃく", "じゃく", "っ", "っ"], '々': ["ぎ", "き", "る", "る", "ぎ", "き", "ぜる", "せる", "づ", "つ", "ぐ", "く", "づ", "つ", "げる", "ける", "ぢゃく", "ちゃく", "じゃく", "じゃく", "っ", "っ", "っ", "っ"]}
     #[test]
     fn test_parse_expression() {
         let cases = vec![
@@ -168,6 +171,58 @@ mod test {
                     ),
                 ],
             ),
+            (
+                "着々".to_string(),
+                "ちゃくちゃく".to_string(),
+                vec![
+                    (
+                        '着',
+                        vec![
+                            "き".to_string(),
+                            "る".to_string(),
+                            "き".to_string(),
+                            "せる".to_string(),
+                            "つ".to_string(),
+                            "く".to_string(),
+                            "つ".to_string(),
+                            "ける".to_string(),
+                            "ちゃく".to_string(),
+                            "じゃく".to_string(),
+                            "っ".to_string(),
+                            "っ".to_string(),
+                        ],
+                    ),
+                    (
+                        '々',
+                        vec![
+                            "ぎ".to_string(),
+                            "き".to_string(),
+                            "る".to_string(),
+                            "る".to_string(),
+                            "ぎ".to_string(),
+                            "き".to_string(),
+                            "ぜる".to_string(),
+                            "せる".to_string(),
+                            "づ".to_string(),
+                            "つ".to_string(),
+                            "ぐ".to_string(),
+                            "く".to_string(),
+                            "づ".to_string(),
+                            "つ".to_string(),
+                            "げる".to_string(),
+                            "ける".to_string(),
+                            "ぢゃく".to_string(),
+                            "ちゃく".to_string(),
+                            "じゃく".to_string(),
+                            "じゃく".to_string(),
+                            "っ".to_string(),
+                            "っ".to_string(),
+                            "っ".to_string(),
+                            "っ".to_string(),
+                        ],
+                    ),
+                ],
+            ),
         ];
 
         for (word, reading, kanji_readings) in cases {
@@ -176,6 +231,7 @@ mod test {
                 .map(|(k, v)| (k, v.into_iter().map(|s| s.to_string()).collect()))
                 .collect();
             let result = parse_furigana(&word, &reading, &kanji_readings);
+            // println!("{:?}", result);
             assert!(result.is_ok());
             let result = result.unwrap();
             assert_eq!(result.to_writing(), word);
